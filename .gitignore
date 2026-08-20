@@ -1,0 +1,12 @@
+.DS_Store
+.build/
+build/
+.cache/
+.swiftpm/
+runtime/stable_audio/.venv/
+runtime/stable_audio/.model-cache/
+runtime/stable_audio/__pycache__/
+.tooling/
+*.log
+*.wav
+*.zip
