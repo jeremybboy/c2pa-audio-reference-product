@@ -31,7 +31,7 @@ From the repository root:
 open "build/Loop Generator.app"
 ```
 
-`setup_runtime.sh` installs Python 3.10, the official Stable Audio tooling, and model files into repository-local ignored directories. The application launches inference with offline mode enabled; network access is only permitted by the explicit setup/verification workflow.
+`setup_runtime.sh` installs Python 3.10, the official Stable Audio tooling, Stable Audio Open Small, and its `t5-base` text encoder into repository-local ignored directories. The application launches inference with offline mode enabled and selects Apple Metal (MPS) when available, with CPU fallback; network access is only permitted by the explicit setup workflow.
 
 ## Architecture
 

@@ -86,6 +86,7 @@ public struct StableAudioRuntimeConfiguration: Equatable, Sendable {
 
         let modelCache = modelCacheCandidates.first {
             containsModelWeights(at: $0, fileManager: fileManager)
+                && containsTextEncoder(at: $0, fileManager: fileManager)
         }
         guard let modelCache else {
             throw GenerationError.modelUnavailable
@@ -112,12 +113,37 @@ public struct StableAudioRuntimeConfiguration: Equatable, Sendable {
             return false
         }
         return snapshots.contains { snapshot in
-            let config = snapshot.appendingPathComponent("config.json")
+            let config = snapshot.appendingPathComponent("model_config.json")
             let safetensors = snapshot.appendingPathComponent("model.safetensors")
             let checkpoint = snapshot.appendingPathComponent("model.ckpt")
             return fileManager.fileExists(atPath: config.path)
                 && (fileManager.fileExists(atPath: safetensors.path)
                     || fileManager.fileExists(atPath: checkpoint.path))
+        }
+    }
+
+    static func containsTextEncoder(
+        at modelCache: URL,
+        fileManager: FileManager = .default
+    ) -> Bool {
+        let snapshotsDirectory = modelCache
+            .appendingPathComponent("models--t5-base")
+            .appendingPathComponent("snapshots")
+        guard let snapshots = try? fileManager.contentsOfDirectory(
+            at: snapshotsDirectory,
+            includingPropertiesForKeys: nil
+        ) else {
+            return false
+        }
+        return snapshots.contains { snapshot in
+            let config = snapshot.appendingPathComponent("config.json")
+            let sentencePiece = snapshot.appendingPathComponent("spiece.model")
+            let safetensors = snapshot.appendingPathComponent("model.safetensors")
+            let pytorchWeights = snapshot.appendingPathComponent("pytorch_model.bin")
+            return fileManager.fileExists(atPath: config.path)
+                && fileManager.fileExists(atPath: sentencePiece.path)
+                && (fileManager.fileExists(atPath: safetensors.path)
+                    || fileManager.fileExists(atPath: pytorchWeights.path))
         }
     }
 }

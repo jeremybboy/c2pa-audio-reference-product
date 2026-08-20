@@ -1,2 +1,4 @@
 stable-audio-tools==0.0.20
 soundfile==0.13.1
+numpy==1.26.4
+pytorch-lightning==2.5.5

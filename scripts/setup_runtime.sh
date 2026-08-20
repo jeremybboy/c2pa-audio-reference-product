@@ -25,7 +25,7 @@ fi
 export UV_CACHE_DIR
 export UV_PYTHON_INSTALL_DIR
 "$UV_BIN" python install 3.10
-"$UV_BIN" venv --python 3.10 "$RUNTIME_DIR/.venv"
+"$UV_BIN" venv --allow-existing --python 3.10 "$RUNTIME_DIR/.venv"
 "$UV_BIN" pip install \
     --python "$RUNTIME_DIR/.venv/bin/python" \
     --requirement "$RUNTIME_DIR/requirements.txt"
@@ -37,6 +37,7 @@ fi
 
 hf auth whoami >/dev/null
 hf download stabilityai/stable-audio-open-small --cache-dir "$MODEL_CACHE"
+hf download t5-base --cache-dir "$MODEL_CACHE"
 
 echo "Runtime installed at $RUNTIME_DIR/.venv"
 echo "Model cached at $MODEL_CACHE"

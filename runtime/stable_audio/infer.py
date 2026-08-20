@@ -12,6 +12,7 @@ import json
 import os
 from pathlib import Path
 import sys
+import traceback
 
 
 MODEL_ID = "stabilityai/stable-audio-open-small"
@@ -53,6 +54,7 @@ def generate(args: argparse.Namespace) -> None:
     if not args.allow_download:
         os.environ["HF_HUB_OFFLINE"] = "1"
         os.environ["TRANSFORMERS_OFFLINE"] = "1"
+    os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
 
     import numpy as np
     import soundfile as sf
@@ -60,7 +62,16 @@ def generate(args: argparse.Namespace) -> None:
     from stable_audio_tools import get_pretrained_model
     from stable_audio_tools.inference.generation import generate_diffusion_cond
 
-    device = "cpu"
+    requested_device = os.environ.get("LOOP_GENERATOR_DEVICE", "auto")
+    if requested_device == "auto":
+        if torch.cuda.is_available():
+            device = "cuda"
+        elif torch.backends.mps.is_available():
+            device = "mps"
+        else:
+            device = "cpu"
+    else:
+        device = requested_device
     print(f"Loading {MODEL_ID} on {device}", flush=True)
     model, model_config = get_pretrained_model(MODEL_ID)
     sample_rate = int(model_config["sample_rate"])
@@ -125,6 +136,7 @@ def main() -> int:
     try:
         generate(args)
     except Exception as error:
+        traceback.print_exc()
         print(f"Stable Audio inference failed: {error}", file=sys.stderr, flush=True)
         return 1
     return 0

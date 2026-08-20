@@ -102,9 +102,43 @@ final class LoopGeneratorCoreTests: XCTestCase {
 
         XCTAssertFalse(StableAudioRuntimeConfiguration.containsModelWeights(at: cache))
 
-        try Data("{}".utf8).write(to: snapshot.appendingPathComponent("config.json"))
+        try Data("{}".utf8).write(to: snapshot.appendingPathComponent("model_config.json"))
         try Data().write(to: snapshot.appendingPathComponent("model.safetensors"))
         XCTAssertTrue(StableAudioRuntimeConfiguration.containsModelWeights(at: cache))
+    }
+
+    func testTextEncoderCacheRequiresTokenizerAndWeights() throws {
+        let cache = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let snapshot = cache.appendingPathComponent("models--t5-base/snapshots/test")
+        try FileManager.default.createDirectory(at: snapshot, withIntermediateDirectories: true)
+        try Data("{}".utf8).write(to: snapshot.appendingPathComponent("config.json"))
+        XCTAssertFalse(StableAudioRuntimeConfiguration.containsTextEncoder(at: cache))
+
+        try Data().write(to: snapshot.appendingPathComponent("spiece.model"))
+        try Data().write(to: snapshot.appendingPathComponent("model.safetensors"))
+        XCTAssertTrue(StableAudioRuntimeConfiguration.containsTextEncoder(at: cache))
+    }
+
+    func testLiveStableAudioAdapterWhenEnabled() async throws {
+        guard ProcessInfo.processInfo.environment["LOOP_GENERATOR_LIVE_TEST"] == "1" else {
+            throw XCTSkip("Set LOOP_GENERATOR_LIVE_TEST=1 to run local model inference")
+        }
+
+        let adapter = try StableAudioAdapter()
+        let request = try GenerationRequest(
+            instrument: .synth,
+            userPrompt: "warm analog pulse, instrumental, 110 BPM",
+            duration: .four,
+            seed: 424_242
+        )
+        let output = try await adapter.generate(request)
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: output.audioURL.path))
+        XCTAssertEqual(output.sampleRate, 44_100, accuracy: 0.1)
+        XCTAssertEqual(output.channelCount, 2)
+        XCTAssertEqual(output.durationSeconds, 4, accuracy: 0.01)
+        XCTAssertFalse(output.modelVersion.isEmpty)
     }
 
     private func makeRecord(outputAsset: URL) -> GenerationRecord {
