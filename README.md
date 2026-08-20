@@ -2,6 +2,10 @@
 
 Loop Generator is an experimental, local-only macOS application for creating short instrumental samples with Stable Audio Open Small. V0 is a SwiftUI standalone so the working product can be validated before plugin shells are added.
 
+## Reference product
+
+This repository is a reference audio product used to study the end-to-end implementation path from an existing AI audio application to C2PA-enabled export and ultimately C2PA conformance. Stable Audio Open Small is the current interchangeable `ModelAdapter` implementation; it is a separately licensed model dependency, not part of the C2PA architecture.
+
 ## Current capabilities
 
 - Instrument-conditioned text-to-audio
@@ -49,11 +53,11 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for component boundaries.
 
 ## Roadmap
 
-- V0 — Local standalone generator
-- V1 — C2PA export through `ProvenanceService`
-- V2 — C2PA conformance preparation
-- V3 — iPlug2 VST3/AU shells
-- V4 — Reusable Audio C2PA Reference Kit
+- V0 — Working local AI audio standalone
+- V1 — C2PA signed WAV export + validation
+- V2 — Conformance preparation
+- V3 — VST3/AU reference integration
+- V4 — Extract reusable Audio C2PA Reference Kit
 
 ## Licensing
 

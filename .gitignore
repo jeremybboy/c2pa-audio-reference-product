@@ -10,3 +10,20 @@ runtime/stable_audio/__pycache__/
 *.log
 *.wav
 *.zip
+
+# Local credentials, signing material, and model artifacts
+.env
+.env.*
+!.env.example
+credentials/
+secrets/
+*.token
+*.key
+*.pem
+*.p12
+*.pfx
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+*.bin
