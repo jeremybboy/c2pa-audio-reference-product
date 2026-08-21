@@ -25,11 +25,24 @@ swift build \
     --security-path "$CACHE_ROOT/swiftpm/security" \
     --scratch-path "$REPO_ROOT/.build"
 
-mkdir -p "$CONTENTS/MacOS" "$CONTENTS/Resources/runtime/stable_audio"
+rm -rf "$APP_BUNDLE"
+mkdir -p \
+    "$CONTENTS/MacOS" \
+    "$CONTENTS/Resources/runtime/stable_audio" \
+    "$CONTENTS/Resources/c2pa/trust"
 cp "$REPO_ROOT/.build/release/LoopGenerator" "$CONTENTS/MacOS/LoopGenerator"
 cp "$REPO_ROOT/packaging/Info.plist" "$CONTENTS/Info.plist"
 cp "$REPO_ROOT/runtime/stable_audio/infer.py" "$CONTENTS/Resources/runtime/stable_audio/infer.py"
 cp "$REPO_ROOT/runtime/stable_audio/requirements.txt" "$CONTENTS/Resources/runtime/stable_audio/requirements.txt"
+if [[ -x "$REPO_ROOT/.tooling/c2pa/0.27.15/c2patool/c2patool" ]]; then
+    cp "$REPO_ROOT/.tooling/c2pa/0.27.15/c2patool/c2patool" "$CONTENTS/Resources/c2pa/c2patool"
+    chmod +x "$CONTENTS/Resources/c2pa/c2patool"
+fi
+if [[ -f "$REPO_ROOT/.c2pa-test/trust/test-root-cert.pem" && \
+      -f "$REPO_ROOT/.c2pa-test/trust/store.cfg" ]]; then
+    cp "$REPO_ROOT/.c2pa-test/trust/test-root-cert.pem" "$CONTENTS/Resources/c2pa/trust/test-root-cert.pem"
+    cp "$REPO_ROOT/.c2pa-test/trust/store.cfg" "$CONTENTS/Resources/c2pa/trust/store.cfg"
+fi
 chmod +x "$CONTENTS/MacOS/LoopGenerator" "$CONTENTS/Resources/runtime/stable_audio/infer.py"
 codesign --force --deep --sign - "$APP_BUNDLE"
 

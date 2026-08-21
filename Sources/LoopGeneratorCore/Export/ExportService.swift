@@ -23,14 +23,23 @@ public final class ExportService: ExportServing, @unchecked Sendable {
     public func exportWAV(record: GenerationRecord, destination: URL) async throws {
         do {
             try encoder.encodeWAV(source: record.outputAsset, destination: destination)
-            let context = ExportContext(
-                generationRecord: record,
-                exportedAsset: destination
-            )
+        } catch {
+            try? FileManager.default.removeItem(at: destination)
+            if let exportError = error as? ExportError {
+                throw exportError
+            }
+            throw ExportError.wavExportFailed
+        }
+
+        let context = ExportContext(
+            generationRecord: record,
+            exportedAsset: destination
+        )
+        do {
             try await provenanceService.processExport(context)
         } catch {
             try? FileManager.default.removeItem(at: destination)
-            throw ExportError.wavExportFailed
+            throw error
         }
     }
 }

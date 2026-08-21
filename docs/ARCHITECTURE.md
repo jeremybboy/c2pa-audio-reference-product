@@ -15,13 +15,21 @@ SwiftUI Application Shell
         |      |
         |      +-- AudioPlaybackEngine
         |      |
-        |      +-- ExportService
+        |      +-- ExportService (ordinary and C2PA instances)
         |             |
         |             +-- AudioExportEncoding
         |             |
         |             +-- ProvenanceService
         |                    |
-        |                    +-- NullProvenanceService (V0)
+        |                    +-- NullProvenanceService
+        |                    |
+        |                    +-- C2PAProvenanceService
+        |                           |
+        |                           +-- SigningCredentialProvider
+        |                           +-- C2PAManifestBuilder
+        |                           +-- C2PAToolRunner
+        |                           +-- C2PAValidationInspection
+        |                           +-- C2PAEvidenceStore
         |
         +-- Waveform viewer
 ```
@@ -32,8 +40,9 @@ SwiftUI Application Shell
 - `ModelAdapter` returns a normal audio asset and model version; it does not control playback or export.
 - `StableAudioAdapter` is the only Swift component aware of the helper process.
 - `GenerationRecord` is model-neutral and provenance-neutral.
-- `ExportService` encodes the WAV first, then invokes `ProvenanceService` with an `ExportContext`.
-- `NullProvenanceService` is intentionally inert; the next implementation can build and sign C2PA assertions without restructuring generation, playback, or UI code.
+- `ExportService` encodes the WAV first, then invokes the selected `ProvenanceService` with an `ExportContext`.
+- Ordinary WAV export keeps `NullProvenanceService`; C2PA export is a separate user action backed by `C2PAProvenanceService`.
+- Signing credentials are supplied through an external provider and are not resources owned by the application bundle.
 - The in-memory audio playback implementation stays in the standalone target. A later iPlug2 shell can supply its own real-time-safe playback/DSP implementation while reusing the request, record, model, export, and provenance contracts.
 
 ## Runtime contract
