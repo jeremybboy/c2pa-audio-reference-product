@@ -2,144 +2,100 @@
 
 Snapshot date: 2026-08-20
 
-## Project purpose
+## Current state
 
-This repository is a reference product for studying the practical implementation path from an ordinary audio product to reusable C2PA infrastructure:
+Loop Generator 0.2.0 is a native SwiftUI macOS reference application with local Stable Audio Open Small generation, ordinary 24-bit WAV export, and a separate C2PA-signed WAV test export. V1 is implemented on `feature/v1-c2pa-export` from merged `main` commit `93be230`; use `git rev-parse HEAD` for the final feature commit.
 
-```text
-ordinary audio product
-→ local AI generation
-→ C2PA export
-→ validation
-→ conformance candidate
-→ reusable Audio C2PA Reference Kit
-```
-
-The current application makes that work concrete without coupling provenance to a specific model or UI. Stable Audio Open Small is the present interchangeable model dependency; it is not part of the C2PA architecture and its weights are not licensed under this repository's MIT source-code license.
-
-## Current repository state
+The V1 working proof is complete:
 
 ```text
-Repository:  c2pa-audio-reference-product
-Visibility:  private
-Branch:      feature/v0-swiftui
-Code HEAD:   b3304a0763a10b61f44f223a6f5e598fb3275aae
-Remote:      https://github.com/jeremybboy/c2pa-audio-reference-product.git
-GitHub:      https://github.com/jeremybboy/c2pa-audio-reference-product
-Worktree:    clean after the documentation commit
+real local model output
+-> 44.1 kHz stereo 24-bit PCM WAV
+-> one embedded C2PA manifest
+-> official Conformance Test signing credential
+-> trusted validation against the Conformance Test Root
+-> one-byte tamper
+-> data-hash mismatch and Invalid state
 ```
 
-`Code HEAD` is the exact application commit inspected while this report was written. The documentation commit cannot embed its own Git object ID because changing that value would change the ID; use `git rev-parse HEAD` for the containing documentation commit.
+This is test infrastructure, not production PKI and not a full conformance claim. The hosted C2PA Asset Conformance 0.2 / Spec 2.4 rubric passed 28 of 31 checks; the exact three failures are documented below and deferred to V1.1.
 
-Relevant history before this documentation commit:
+## Product capabilities
+
+- Local Stable Audio Open Small inference for 4-, 8-, or 11-second instrumental loops.
+- Synth, Bass, Drums, Piano, Guitar, Strings, and FX prompt conditioning.
+- Deterministic or random seed selection.
+- Waveform preview, playback, restart, loop, and volume controls.
+- Ordinary 44.1 kHz stereo 24-bit PCM WAV export.
+- Separate `Export C2PA WAV (Test)` UI action.
+- JSON generation records and ignored C2PA evidence records.
+- App version `0.2.0`, build `2`.
+
+## Modular architecture
 
 ```text
-b3304a0 fix: complete offline Stable Audio runtime
-017b807 feat: build Loop Generator V0
-b20e82c chore: initialize loop-generator repository
+SwiftUI/AppViewModel
+    |-- GenerationController
+    |     `-- ModelAdapter
+    |           `-- StableAudioAdapter -> local Python runtime
+    |-- AudioPlaybackEngine
+    `-- ExportService
+          |-- AudioExportEncoding -> AVFoundationWAVEncoder
+          `-- ProvenanceService
+                |-- NullProvenanceService
+                `-- C2PAProvenanceService
+                      |-- SigningCredentialProvider
+                      |-- C2PAManifestBuilder
+                      |-- C2PAToolRunner
+                      |-- C2PAValidationInspection
+                      `-- C2PAEvidenceStore
 ```
 
-The original Git history is preserved. `main` remains at `b20e82c`; the working implementation and this handoff are on `feature/v0-swiftui`. This task does not merge the feature branch into `main`.
+`LoopGeneratorCore` has no SwiftUI dependency. The model creates an ordinary audio asset; provenance is applied only after export encoding. This keeps model execution, UI, playback, export, signing, validation, and future plugin shells separable.
 
-## Current V0
+## C2PA implementation
 
-The demonstrated V0 is a native SwiftUI macOS standalone with:
+The frozen manifest profile is documented in `docs/C2PA_V1_PROFILE.md`. The core policy is:
 
-- Local Stable Audio Open Small inference for instrumental generation.
-- Synth, Bass, Drums, Piano, Guitar, Strings, and FX categories.
-- 4-, 8-, and 11-second generation.
-- Random or user-specified deterministic seeds.
-- Waveform preview.
-- Play/pause and restart controls.
-- Loop playback and volume control.
-- 44.1 kHz stereo 24-bit PCM WAV export.
-- JSON generation metadata records.
-- A model-neutral `ModelAdapter` abstraction.
-- An export-time `ProvenanceService` boundary.
+- One active embedded manifest.
+- One `c2pa.actions.v2` assertion.
+- One `c2pa.created` action.
+- Exact trained-algorithmic-media digital source type URI.
+- Stable Audio Open Small and the exact model revision as action software agent.
+- Loop Generator and actual app version as claim generator.
+- No ingredients, prompt, seed, `allActionsIncluded`, or TSA.
 
-V0 does not generate C2PA manifests and has no VST3 or Audio Unit target.
+`C2PAProvenanceService` writes a temporary manifest definition, invokes c2patool with explicit create intent, independently validates trust and the frozen profile, atomically replaces the unsigned destination with the signed WAV, and records evidence. If signing or validation fails, `ExportService` removes the partial output and propagates the specific provenance error.
 
-## Architecture
+## Credential and trust boundary
 
-Generation path:
+The official C2PA Conformance Test signing credential remains external at `~/Downloads/test-signing-bundle.pem` by default. `LOOP_GENERATOR_C2PA_SIGNING_BUNDLE` can override that path. The combined PEM is passed as both c2patool certificate and private-key input; it is not split, copied, packaged, or committed.
+
+The app bundle contains only:
+
+- Pinned c2patool `0.27.15`.
+- Public C2PA Conformance Test Root.
+- Public C2PA trust-purpose configuration.
+
+The setup script verifies the external certificate fingerprint, cert/key match, EKU-compatible chain, pinned public root, and pinned tool checksums. Test-mode trust proves the signer chains to the Test Root; it deliberately does not imply production trust.
+
+## Runtime pins
 
 ```text
-SwiftUI App
-    ↓
-AppViewModel
-    ↓
-GenerationController
-    ↓
-ModelAdapter
-    ↓
-StableAudioAdapter
-    ↓
-Local Python Stable Audio runtime
+macOS validation host:      26.6.2 / Apple Silicon
+declared minimum macOS:     14.0
+Swift compiler:             6.3, Swift language mode 5
+Python:                     3.10.21
+Stable Audio Tools:         0.0.20
+Stable Audio model commit:  dc620d91535857b72ebb59b4ca45978db6d417f5
+c2patool:                   0.27.15
+c2pa-rs reported by tool:   0.90.15
+Conformance Tool commit:    44c81e07fc92b39a525412f4e7a1c2cda0757beb
 ```
 
-Export path:
+Model weights, Python environments, generated audio, C2PA evidence, c2patool, trust-test files, and signing credentials are ignored local dependencies.
 
-```text
-ExportService
-    ├── AudioExportEncoding
-    │       └── AVFoundationWAVEncoder
-    └── ProvenanceService
-            └── NullProvenanceService (V0)
-```
-
-`LoopGeneratorCore` is independent of SwiftUI. `StableAudioAdapter` is the only Swift component that knows about the Python inference subprocess. `GenerationRecord` is model-neutral and provenance-neutral. `ExportService` writes the WAV and then invokes `ProvenanceService` with both the generation record and exported asset.
-
-That export boundary is the key V1 seam: `NullProvenanceService` can be replaced by `C2PAProvenanceService` without moving C2PA logic into the UI, model adapter, playback engine, or real-time audio code. It also keeps future VST3/AU shells from owning provenance policy.
-
-## Runtime state
-
-Verified on the current machine:
-
-```text
-Architecture:              arm64 / Apple Silicon
-macOS:                     26.6.2 (build 25G83)
-Declared minimum macOS:    14.0
-Swift compiler:            Apple Swift 6.3
-Swift language mode:       5
-Python:                    3.10.21
-PyTorch:                   2.7.1
-NumPy:                     1.26.4
-SoundFile:                 0.13.1
-PyTorch Lightning:         2.5.5
-Stable Audio Tools:        pinned to 0.0.20
-Acceleration:              MPS verified available and used
-Stable Audio model commit: dc620d91535857b72ebb59b4ca45978db6d417f5
-```
-
-The live inference log states:
-
-```text
-Loading stabilityai/stable-audio-open-small on mps
-```
-
-The Python environment and Hugging Face caches are repository-local ignored data:
-
-```text
-runtime/stable_audio/.venv/        approximately 692 MB
-runtime/stable_audio/.model-cache/ approximately 8.8 GB
-```
-
-The model cache contains Stable Audio Open Small plus its separate `t5-base` text encoder. Model setup is an explicit authenticated workflow; normal inference sets Hugging Face and Transformers to offline mode.
-
-## Validation state
-
-The current application code at `b3304a0` was validated before this documentation-only commit:
-
-- Normal Swift suite: 9 tests executed, 1 opt-in live test skipped, 0 failures.
-- Opt-in live adapter test: 1 test executed, 0 failures, 8.159 seconds.
-- Direct model verification produced an exactly four-second, 44.1 kHz, stereo Float32 preview WAV with seed `424242`.
-- The packaged app produced valid eight-second audio and JSON generation records through the UI.
-- The local app bundle passed strict `codesign --verify` with an ad-hoc signature.
-- App and source archives passed ZIP integrity checks.
-
-This documentation task does not rebuild or change the application architecture.
-
-## Build, test, and launch
+## Reproduce
 
 From the repository root:
 
@@ -147,42 +103,44 @@ From the repository root:
 cd "/Users/uzanj/Documents/Codex/2026-08-20/files-mentioned-by-the-user-chatgpt/loop-generator"
 ```
 
-Install or refresh the repository-local runtime and download the gated model after the user has completed the required upstream access steps:
+Set up and verify the model:
 
 ```bash
 ./scripts/setup_runtime.sh
-```
-
-Perform real model verification:
-
-```bash
 ./scripts/verify_model.sh
 ```
 
-Run the normal tests:
+Set up and verify C2PA with the external credential:
 
 ```bash
-CLANG_MODULE_CACHE_PATH="$PWD/.cache/clang" \
-SWIFTPM_MODULECACHE_OVERRIDE="$PWD/.cache/clang" \
-swift test --disable-sandbox \
-  --cache-path .cache/swiftpm \
-  --config-path .cache/swiftpm/configuration \
-  --security-path .cache/swiftpm/security \
-  --scratch-path .build
+./scripts/setup_c2pa.sh "$HOME/Downloads/test-signing-bundle.pem"
+./scripts/verify_c2pa.sh
 ```
 
-Run the real-model integration test:
+Run the normal suite:
 
 ```bash
-LOOP_GENERATOR_LIVE_TEST=1 \
 CLANG_MODULE_CACHE_PATH="$PWD/.cache/clang" \
 SWIFTPM_MODULECACHE_OVERRIDE="$PWD/.cache/clang" \
 swift test --disable-sandbox \
-  --filter LoopGeneratorCoreTests.testLiveStableAudioAdapterWhenEnabled \
-  --cache-path .cache/swiftpm \
-  --config-path .cache/swiftpm/configuration \
-  --security-path .cache/swiftpm/security \
-  --scratch-path .build
+  --cache-path "$PWD/.cache/swiftpm" \
+  --config-path "$PWD/.cache/swiftpm/configuration" \
+  --security-path "$PWD/.cache/swiftpm/security" \
+  --scratch-path "$PWD/.build"
+```
+
+Run the real C2PA integration test directly:
+
+```bash
+LOOP_GENERATOR_C2PA_LIVE_TEST=1 \
+CLANG_MODULE_CACHE_PATH="$PWD/.cache/clang" \
+SWIFTPM_MODULECACHE_OVERRIDE="$PWD/.cache/clang" \
+swift test --disable-sandbox \
+  --filter C2PAExportTests.testLiveC2PASigningTrustAndTamperDetectionWhenEnabled \
+  --cache-path "$PWD/.cache/swiftpm" \
+  --config-path "$PWD/.cache/swiftpm/configuration" \
+  --security-path "$PWD/.cache/swiftpm/security" \
+  --scratch-path "$PWD/.build"
 ```
 
 Build and launch:
@@ -192,64 +150,43 @@ Build and launch:
 open "build/Loop Generator.app"
 ```
 
-## Known limitations
+## Validation evidence
 
-- The app is not self-contained for distribution.
-- The Python environment and model cache are external to the `.app`.
-- The bundle has no Developer ID signature or notarization.
-- No C2PA manifest is generated or embedded.
-- No production C2PA signing credential exists.
-- No trusted timestamp authority is integrated.
-- No independent C2PA validation flow exists.
-- No VST3 or Audio Unit target exists.
-- The Python/model subprocess architecture is prototype-grade: each request starts a process and reloads the model.
-- There is no persistent inference service, cancellation, request queue, or granular progress reporting.
-- Generated caches and records have no retention or cleanup policy.
-- macOS 14 is declared as the minimum but has not been independently validated; current validation was on macOS 26.6.2.
+`build/c2pa-evidence/v1/` is generated and ignored. The verified run contains the unsigned source, signed WAV, tampered WAV, embedded-manifest JSON, trusted validation JSON, negative validation JSON, service evidence, checksums, and a browser observation record.
 
-## V1 — C2PA Export
+The positive validator report contains:
 
-The next milestone is deliberately narrow:
+- `validation_state: Trusted`
+- `signingCredential.trusted`
+- `claimSignature.validated`
+- `assertion.dataHash.match`
+- zero failures
 
-```text
-GenerationRecord
-    ↓
-Generated audio
-    ↓
-WAV export
-    ↓
-C2PAProvenanceService
-    ↓
-C2PA manifest
-    ↓
-development signing credential
-    ↓
-embedded C2PA WAV
-    ↓
-independent validation
-```
+The negative validator report contains:
 
-The first C2PA milestone does not require:
+- `validation_state: Invalid`
+- `assertion.dataHash.mismatch`
 
-- Production signing credentials.
-- A trusted timestamp authority.
-- Conformance submission.
-- VST3 or Audio Unit targets.
-- Notarized public distribution.
+The official hosted C2PA Conformance Tool was also run with one Test Mode certificate loaded. It reported `Signature Trusted via Test Certificate`, issuer `C2PA Conformance Test Root`, claim generator `Loop Generator v0.2.0`, and one `c2pa.actions.v2` assertion.
 
-The proof target is:
+The hosted C2PA Asset Conformance 0.2 / Spec 2.4 rubric result was 28/31, overall Fail. The missing items are `specVersion` in `claim_generator_info`, an explicit `allActionsIncluded` field, and attribution of the inception action as the first actions assertion in `created_assertions`; the current tool output places it in `gathered_assertions`.
 
-```text
-generate → export → sign → embed → validate
-```
+## Known limitations and next work
 
-with development credentials. Every implementation obstacle must be captured in `docs/FRICTION_LOG.md` so the evidence can later inform the reusable Audio C2PA Reference Kit.
+- The signing credential and Test Root are strictly test-only.
+- No TSA, production certificate lifecycle, hardware-backed key, Developer ID signature, notarization, or public distribution workflow exists.
+- Formal Spec 2.4 conformance is not claimed: the hosted rubric passed 28/31 and the three failed checks are frozen for V1.1.
+- Omitting `allActionsIncluded` produces an informational `Contains ambiguous actions` signal in the Conformance Tool; the omission is required by the frozen V1 policy unless completeness can be substantiated.
+- The `.app` depends on the external Python environment/model cache and external signing PEM.
+- The model helper reloads the model per request; there is no persistent inference service, cancellation, or queue.
+- No VST3, Audio Unit, or CLAP target exists.
+- C2PA trust proves signature and byte integrity under the configured trust root; it does not prove descriptive truth.
 
 ## Guardrails
 
-- Do not commit model weights, Hugging Face caches, Python environments, generated audio, logs, build products, credentials, tokens, private keys, or private signing material.
-- Do not imply that Stable Audio weights use this repository's MIT license.
-- Do not claim C2PA functionality until an exported WAV contains a signed manifest and passes an independent validation flow.
-- Keep model inference and future plugin work outside real-time audio threads.
-- Preserve the `ModelAdapter`, `ExportService`, and `ProvenanceService` boundaries.
-- Use normal feature-branch commits and non-force pushes; do not rewrite the existing history.
+- Never commit or package the signing bundle or any private key.
+- Never replace test trust with production trust language.
+- Never add prompt or seed to the V1 manifest without a profile decision.
+- Never introduce ingredients or `allActionsIncluded` through c2patool defaults.
+- Keep signing and model inference outside real-time audio threads.
+- Preserve ordinary WAV export and the protocol boundaries required by future plugin shells.

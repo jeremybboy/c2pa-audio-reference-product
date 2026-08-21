@@ -7,6 +7,7 @@ runtime/stable_audio/.venv/
 runtime/stable_audio/.model-cache/
 runtime/stable_audio/__pycache__/
 .tooling/
+.c2pa-test/
 *.log
 *.wav
 *.zip

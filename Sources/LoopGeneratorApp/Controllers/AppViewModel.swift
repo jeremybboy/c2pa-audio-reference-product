@@ -33,13 +33,19 @@ final class AppViewModel: ObservableObject {
     @Published private(set) var errorMessage: String?
     @Published private(set) var lastRecord: GenerationRecord?
     @Published private(set) var modelIsAvailable = false
+    @Published private(set) var c2paIsAvailable = false
 
+    let applicationVersion: String
     private let playbackEngine = AudioPlaybackEngine()
     private let generationController: GenerationController?
     private let exportService: ExportService
+    private let c2paExportService: ExportService?
     private var playbackTimer: Timer?
 
     init() {
+        applicationVersion = Bundle.main.object(
+            forInfoDictionaryKey: "CFBundleShortVersionString"
+        ) as? String ?? "0.2.0"
         let recordStore = JSONGenerationRecordStore()
         if let adapter = try? StableAudioAdapter() {
             generationController = GenerationController(
@@ -55,6 +61,18 @@ final class AppViewModel: ObservableObject {
             encoder: AVFoundationWAVEncoder(),
             provenanceService: NullProvenanceService()
         )
+        if let provenanceService = try? C2PAProvenanceService(
+            applicationVersion: applicationVersion
+        ) {
+            c2paExportService = ExportService(
+                encoder: AVFoundationWAVEncoder(),
+                provenanceService: provenanceService
+            )
+            c2paIsAvailable = true
+        } else {
+            c2paExportService = nil
+            c2paIsAvailable = false
+        }
         playbackEngine.volume = Float(volume)
         startPlaybackTimer()
     }
@@ -69,6 +87,7 @@ final class AppViewModel: ObservableObject {
 
     var canPlay: Bool { lastRecord != nil && !status.isBusy }
     var canExport: Bool { lastRecord != nil && !status.isBusy }
+    var canExportC2PA: Bool { canExport && c2paExportService != nil }
 
     var displayedSeed: String {
         lastRecord.map { String($0.seed) } ?? "Random"
@@ -184,7 +203,32 @@ final class AppViewModel: ObservableObject {
                 try await exportService.exportWAV(record: record, destination: destination)
                 status = .readyToPlay
             } catch {
-                showError(ExportError.wavExportFailed.localizedDescription)
+                showError(error.localizedDescription)
+            }
+        }
+    }
+
+    func exportC2PAWAV() {
+        guard let record = lastRecord, let c2paExportService else { return }
+        let panel = NSSavePanel()
+        panel.title = "Export C2PA Test WAV"
+        panel.nameFieldStringValue =
+            "Loop Generator - \(record.instrument.rawValue) - C2PA Test.wav"
+        panel.allowedContentTypes = [.wav]
+        panel.canCreateDirectories = true
+        guard panel.runModal() == .OK, let destination = panel.url else { return }
+
+        status = .exporting
+        errorMessage = nil
+        Task {
+            do {
+                try await c2paExportService.exportWAV(
+                    record: record,
+                    destination: destination
+                )
+                status = .readyToPlay
+            } catch {
+                showError(error.localizedDescription)
             }
         }
     }

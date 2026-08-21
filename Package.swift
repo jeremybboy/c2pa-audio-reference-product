@@ -9,7 +9,11 @@ let package = Package(
     ],
     products: [
         .library(name: "LoopGeneratorCore", targets: ["LoopGeneratorCore"]),
-        .executable(name: "LoopGenerator", targets: ["LoopGenerator"])
+        .executable(name: "LoopGenerator", targets: ["LoopGenerator"]),
+        .executable(
+            name: "LoopGeneratorC2PAVerify",
+            targets: ["LoopGeneratorC2PAVerify"]
+        )
     ],
     targets: [
         .target(
@@ -20,6 +24,11 @@ let package = Package(
             name: "LoopGenerator",
             dependencies: ["LoopGeneratorCore"],
             path: "Sources/LoopGeneratorApp"
+        ),
+        .executableTarget(
+            name: "LoopGeneratorC2PAVerify",
+            dependencies: ["LoopGeneratorCore"],
+            path: "Sources/LoopGeneratorC2PAVerify"
         ),
         .testTarget(
             name: "LoopGeneratorCoreTests",

@@ -44,7 +44,7 @@ struct ContentView: View {
             }
             HStack {
                 Spacer()
-                Text("v0.1.0")
+                Text("v\(viewModel.applicationVersion)")
                     .font(.system(size: 12))
                     .foregroundStyle(Color.lgMuted)
                     .padding(.trailing, 20)
@@ -310,22 +310,25 @@ struct ContentView: View {
                         .frame(width: 210, height: 46)
                 }
 
-                HStack {
-                    Spacer()
-                    Image(systemName: "lock")
-                    Text("Export with C2PA (coming next)")
-                    Spacer()
+                Button(action: viewModel.exportC2PAWAV) {
+                    Label("Export C2PA WAV (Test)", systemImage: "checkmark.seal")
                 }
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(Color.lgMuted.opacity(0.7))
+                .buttonStyle(ExportButtonStyle())
+                .disabled(!viewModel.canExportC2PA)
                 .frame(height: 42)
-                .background(Color.white.opacity(0.025))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.lgBorder, lineWidth: 1))
+                .help(
+                    viewModel.c2paIsAvailable
+                        ? "Sign and validate with the C2PA Conformance Test credential"
+                        : "Run scripts/setup_c2pa.sh and keep test-signing-bundle.pem in Downloads"
+                )
 
-                Text("Generation records are retained for the future provenance pipeline.")
+                Text(
+                    viewModel.c2paIsAvailable
+                        ? "Test credential only — output is not production-trusted."
+                        : "C2PA test tooling or the external credential is unavailable."
+                )
                     .font(.system(size: 12))
-                    .foregroundStyle(Color.lgMuted)
+                    .foregroundStyle(viewModel.c2paIsAvailable ? Color.orange : Color.lgMuted)
                     .frame(maxWidth: .infinity, alignment: .center)
             }
             .padding(18)
