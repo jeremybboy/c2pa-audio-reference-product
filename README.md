@@ -1,3 +1,6 @@
+<img width="1267" height="756" alt="Screenshot 2026-09-14 at 8 21 38 AM" src="https://github.com/user-attachments/assets/6985163b-0d29-41fd-93f7-8ef640ef1499" />
+
+
 # Loop Generator
 
 Loop Generator is an experimental, local-only macOS application for creating short instrumental samples with Stable Audio Open Small. Version 0.2.0 adds a separate C2PA-signed WAV export while preserving ordinary WAV export and the modular path toward future plugin shells.
