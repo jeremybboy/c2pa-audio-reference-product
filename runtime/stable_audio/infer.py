@@ -24,7 +24,12 @@ EXPECTED_CHANNELS = 2
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate a local instrumental loop")
     parser.add_argument("--prompt", required=True)
-    parser.add_argument("--seconds", required=True, type=int, choices=(4, 8, 11))
+    parser.add_argument(
+        "--seconds",
+        required=True,
+        type=float,
+        help="Requested duration in seconds (1.0 through 11.0)",
+    )
     parser.add_argument("--seed", required=True, type=int)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--metadata-output", required=True, type=Path)
@@ -33,7 +38,10 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Allow network model fetches during explicit setup only",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    if not 1.0 <= args.seconds <= 11.0:
+        parser.error("--seconds must be between 1.0 and 11.0")
+    return args
 
 
 def cached_model_revision() -> str:
@@ -97,7 +105,7 @@ def generate(args: argparse.Namespace) -> None:
         )
 
     audio = output[0].detach().to(torch.float32).cpu()
-    target_frames = args.seconds * sample_rate
+    target_frames = round(args.seconds * sample_rate)
     audio = audio[:, :target_frames]
     peak = torch.max(torch.abs(audio)).item()
     if not np.isfinite(peak):

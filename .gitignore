@@ -1,6 +1,8 @@
 .DS_Store
 .build/
 build/
+build-vst3/
+build-daw-host/
 .cache/
 .swiftpm/
 runtime/stable_audio/.venv/

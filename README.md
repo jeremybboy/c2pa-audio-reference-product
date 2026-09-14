@@ -3,7 +3,7 @@
 
 # Loop Generator
 
-Loop Generator is an experimental, local-only macOS application for creating short instrumental samples with Stable Audio Open Small. Version 0.2.0 adds a separate C2PA-signed WAV export while preserving ordinary WAV export and the modular path toward future plugin shells.
+Loop Generator is an experimental, local-only macOS tool for creating short instrumental samples with Stable Audio Open Small. The repository now contains the original SwiftUI standalone and an Apple-Silicon VST3 audio-effect prototype; C2PA export remains in the standalone and is deliberately deferred from the plug-in.
 
 ## Reference product
 
@@ -20,6 +20,10 @@ This repository is a reference audio product used to study the end-to-end implem
 - Trusted validation against the C2PA Conformance Test Root
 - Positive and tamper-negative evidence generation
 - Internal generation records and modular provenance services
+- JUCE 8.0.12 VST3 audio effect with generation outside the real-time callback
+- 1, 2, or 4-bar generation based on host tempo and time signature
+- Host-synchronized loop playback, preview playback, gain, and saved plug-in state
+- External WAV drag-out for hosts that accept operating-system file drops
 
 ## V1 release status
 
@@ -32,12 +36,30 @@ Three manifest-alignment items are intentionally deferred to V1.1: add `specVers
 - Apple Silicon Mac
 - macOS 14 or later
 - Xcode command-line tools
-- CMake is not required for the SwiftUI V0
+- CMake 3.25 or later for the VST3 (not required for the SwiftUI standalone)
 - Authenticated Hugging Face CLI access to `stabilityai/stable-audio-open-small`
 - Acceptance of the model's license terms by the person running setup
-- Official C2PA Conformance Test signing bundle stored externally as `~/Downloads/test-signing-bundle.pem`
+- Official C2PA Conformance Test signing bundle stored externally as `~/Downloads/test-signing-bundle.pem` only for the standalone C2PA test path
 
 ## Build and run
+
+### VST3
+
+From the repository root:
+
+```bash
+./scripts/setup_runtime.sh
+JUCE_DIR="$(./scripts/setup_vst3.sh)"
+./scripts/build_vst3.sh "$JUCE_DIR"
+ctest --test-dir build-vst3 --output-on-failure
+./scripts/install_vst3.sh
+```
+
+The installed bundle is `~/Library/Audio/Plug-Ins/VST3/Loop Generator.vst3`. Add it as an **audio effect** in the host, open its editor, choose a 1/2/4-bar length, generate, and press host Play; generation is a background helper process and never runs on the audio callback. `Drag WAV to DAW` exposes the cached generated file at `~/Library/Caches/LoopGenerator/generated`, but acceptance and placement of an external file drop depend on the host and require a manual DAW check.
+
+The plug-in runtime stays external at `~/Library/Application Support/LoopGenerator/runtime`, linked by the installer to the ignored repository runtime. The model weights, Python environment, generated WAVs, and signing credentials are not packaged in the VST3 or tracked by Git.
+
+### SwiftUI standalone
 
 From the repository root:
 
@@ -54,18 +76,23 @@ open "build/Loop Generator.app"
 
 ## Architecture
 
-The SwiftUI shell depends on `LoopGeneratorCore`, not the other way around. Model execution, generation records, export, and provenance are expressed as independent protocols/services; a future iPlug2 VST3/AU shell can reuse or bridge these boundaries without moving ML code into the UI or plugin process.
+The SwiftUI shell depends on `LoopGeneratorCore`, not the other way around. The VST3 is a separate JUCE shell with an immutable in-memory audio store, a background Stable Audio service, and host-facing playback/state code; both shells preserve a file/process boundary around inference, and neither runs model inference on a real-time audio thread.
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for component boundaries and [docs/C2PA_V1_PROFILE.md](docs/C2PA_V1_PROFILE.md) for the exact manifest, trust, and validation profile.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for component boundaries, [docs/VST3_V0_PROFILE.md](docs/VST3_V0_PROFILE.md) for the exact plug-in scope, and [docs/C2PA_V1_PROFILE.md](docs/C2PA_V1_PROFILE.md) for the standalone manifest, trust, and validation profile.
 
 ## Current limitations
 
 - Experimental test implementation for Apple Silicon macOS
 - Python helper and model files are local development dependencies, not embedded in the `.app`
+- VST3 is arm64-only, ad-hoc signed, and not notarized or packaged for distribution
+- The current C2PA sequencer hosts audio effects, so the VST3 declares itself as an effect rather than an instrument
+- Drag-out is implemented, but successful timeline placement remains host-specific manual acceptance
+- Generated cache files are not automatically pruned in this prototype
+- No C2PA signing or export occurs inside the VST3
 - C2PA uses a public test credential and Test Root, not production PKI
 - C2PA Asset Conformance 0.2 / Spec 2.4 result is 28/31; three documented items are deferred to V1.1
 - No TSA, Developer ID distribution signature, notarization, or full conformance claim
-- No VST3, Audio Unit, or CLAP targets yet
+- No Audio Unit or CLAP target yet
 - No project saving, generation-history UI, or audio editing
 
 ## Roadmap
@@ -73,7 +100,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for component boundaries and [d
 - V0 — Working local AI audio standalone
 - V1 — C2PA signed WAV export + validation
 - V2 — Conformance preparation
-- V3 — VST3/AU reference integration
+- V3 — VST3 reference prototype implemented; AU and provenance integration remain
 - V4 — Extract reusable Audio C2PA Reference Kit
 
 ## Licensing
