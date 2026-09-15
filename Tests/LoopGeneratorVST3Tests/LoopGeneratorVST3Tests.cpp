@@ -1,5 +1,6 @@
 #include "GenerationService.h"
 #include "PluginProcessor.h"
+#include "C2PASigningService.h"
 
 #include <juce_audio_formats/juce_audio_formats.h>
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -97,10 +98,99 @@ int main()
         || ! command.contains("HF_HUB_CACHE=/runtime/model cache"))
         return fail(7, "Generation command did not preserve argument boundaries.");
 
+    const auto tool = root.getChildFile("c2patool");
+    const auto signingBundle = root.getChildFile("test-signing-bundle.pem");
+    const auto trustAnchors = root.getChildFile("test-root.pem");
+    const auto trustConfig = root.getChildFile("store.cfg");
+    const auto metadata = root.getChildFile("model.json");
+    tool.replaceWithText("test tool");
+    signingBundle.replaceWithText("-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----\n");
+    trustAnchors.replaceWithText("test root");
+    trustConfig.replaceWithText("test config");
+    metadata.replaceWithText(R"json({
+        "modelName": "Stable Audio Open Small",
+        "modelVersion": "test-revision"
+    })json");
+    loopgenerator::C2PASigningConfiguration signingConfiguration {
+        tool, signingBundle, trustAnchors, trustConfig
+    };
+    int toolCalls = 0;
+    juce::String observedManifest;
+    loopgenerator::C2PASigningService signingService(
+        signingConfiguration,
+        [&toolCalls, &observedManifest](const juce::StringArray& arguments)
+        {
+            ++toolCalls;
+            const auto outputIndex = arguments.indexOf("--output");
+            if (outputIndex >= 0)
+            {
+                const auto manifestIndex = arguments.indexOf("--manifest");
+                observedManifest = juce::File(arguments[manifestIndex + 1])
+                    .loadFileAsString();
+                const auto source = juce::File(arguments[1]);
+                const auto destination = juce::File(arguments[outputIndex + 1]);
+                return loopgenerator::C2PAToolResult {
+                    source.copyFileTo(destination) ? 0 : 1,
+                    "signed"
+                };
+            }
+            return loopgenerator::C2PAToolResult { 0, R"json({
+                "validation_state": "Trusted",
+                "validation_results": {
+                    "activeManifest": {
+                        "success": [
+                            { "code": "signingCredential.trusted" },
+                            { "code": "claimSignature.validated" },
+                            { "code": "assertion.dataHash.match" }
+                        ],
+                        "failure": []
+                    }
+                },
+                "assertion": {
+                    "action": "c2pa.created",
+                    "digitalSourceType": "trainedAlgorithmicMedia"
+                }
+            })json" };
+        });
+    if (auto result = signingService.signAndValidate(fixture, metadata); result.failed())
+        return fail(8, "C2PA signing pipeline failed: " + result.getErrorMessage());
+    if (toolCalls != 2
+        || ! observedManifest.contains("Loop Generator/")
+        || ! observedManifest.contains("Stable Audio Open Small")
+        || ! observedManifest.contains("c2pa.created")
+        || ! observedManifest.contains(signingBundle.getFullPathName()))
+        return fail(9, "C2PA manifest or sign/validate command sequence is incorrect.");
+
+    if (juce::SystemStats::getEnvironmentVariable(
+            "LOOP_GENERATOR_C2PA_LIVE_TEST", {}) == "1")
+    {
+        juce::String configurationError;
+        const auto liveConfiguration =
+            loopgenerator::C2PASigningConfiguration::discover(configurationError);
+        if (! liveConfiguration)
+            return fail(10, "Live C2PA configuration failed: " + configurationError);
+        const auto requestedLiveWav = juce::SystemStats::getEnvironmentVariable(
+            "LOOP_GENERATOR_C2PA_LIVE_WAV", {});
+        const auto requestedLiveMetadata = juce::SystemStats::getEnvironmentVariable(
+            "LOOP_GENERATOR_C2PA_LIVE_METADATA", {});
+        const auto liveSource = requestedLiveWav.isNotEmpty()
+            ? juce::File(requestedLiveWav) : fixture;
+        const auto liveMetadata = requestedLiveMetadata.isNotEmpty()
+            ? juce::File(requestedLiveMetadata) : metadata;
+        const auto liveWav = root.getChildFile("live-c2pa.wav");
+        if (! liveSource.copyFileTo(liveWav))
+            return fail(11, "Could not prepare the live C2PA WAV fixture.");
+        loopgenerator::C2PASigningService liveSigningService(*liveConfiguration);
+        if (auto result = liveSigningService.signAndValidate(liveWav, liveMetadata);
+            result.failed())
+            return fail(12, "Live C2PA sign/validate failed: " + result.getErrorMessage());
+        std::cout << "live C2PA signing passed\n";
+    }
+
     loopgenerator::LoopGeneratorAudioProcessor processor;
     processor.prepareToPlay(48000.0, 512);
     if (processor.loadGeneratedAudio(fixture, 2, 120.0).failed())
-        return fail(8, "Processor did not accept a generated WAV.");
+        return fail(13, "Processor did not accept a generated WAV.");
     processor.parameters().getParameter(loopgenerator::parameter::sync)
         ->setValueNotifyingHost(0.0f);
     processor.setPreviewPlaying(true);
@@ -109,7 +199,7 @@ int main()
     juce::MidiBuffer midi;
     processor.processBlock(output, midi);
     if (output.getRMSLevel(0, 0, output.getNumSamples()) <= 0.01f)
-        return fail(9, "Preview playback did not produce audio.");
+        return fail(14, "Preview playback did not produce audio.");
 
     TestPlayHead playHead;
     playHead.position.setIsPlaying(true);
@@ -124,7 +214,7 @@ int main()
     processor.processBlock(output, midi);
     if (output.getRMSLevel(0, 0, output.getNumSamples()) <= 0.01f
         || std::abs(processor.currentHostBpm() - 128.0) > 0.001)
-        return fail(10, "Host-synchronized playback did not produce audio.");
+        return fail(15, "Host-synchronized playback did not produce audio.");
 
     juce::MemoryBlock state;
     processor.getStateInformation(state);
@@ -138,7 +228,7 @@ int main()
     restored.processBlock(output, midi);
     if (state.isEmpty() || restored.generatedFile() != fixture
         || output.getRMSLevel(0, 0, output.getNumSamples()) <= 0.01f)
-        return fail(11, "VST3 state did not restore the generated loop.");
+        return fail(16, "VST3 state did not restore the generated loop.");
 
     if (juce::SystemStats::getEnvironmentVariable(
             "LOOP_GENERATOR_VST3_LIVE_TEST", {}) == "1")
@@ -146,22 +236,22 @@ int main()
         loopgenerator::LoopGeneratorAudioProcessor liveProcessor;
         liveProcessor.prepareToPlay(48000.0, 512);
         if (! liveProcessor.runtimeIsReady())
-            return fail(12, "Installed Stable Audio runtime was not discovered: "
+            return fail(17, "Installed Stable Audio runtime was not discovered: "
                 + liveProcessor.statusText());
         liveProcessor.parameters().getParameter(loopgenerator::parameter::bars)
             ->setValueNotifyingHost(0.0f);
         if (! liveProcessor.requestGeneration(
                 "Synth", "warm analog pulse, instrumental, 120 BPM", 424242))
-            return fail(13, "Live generation request was rejected: "
+            return fail(18, "Live generation request was rejected: "
                 + liveProcessor.statusText());
-        const auto deadline = juce::Time::getMillisecondCounterHiRes() + 90000.0;
+        const auto deadline = juce::Time::getMillisecondCounterHiRes() + 240000.0;
         while (liveProcessor.isGenerating()
                && juce::Time::getMillisecondCounterHiRes() < deadline)
             juce::Thread::sleep(50);
         if (liveProcessor.isGenerating())
-            return fail(14, "Live Stable Audio generation timed out.");
+            return fail(19, "Live Stable Audio generation timed out.");
         if (! liveProcessor.generatedFile().existsAsFile())
-            return fail(15, "Live Stable Audio generation failed: "
+            return fail(20, "Live Stable Audio generation failed: "
                 + liveProcessor.statusText());
         liveProcessor.parameters().getParameter(loopgenerator::parameter::sync)
             ->setValueNotifyingHost(0.0f);
@@ -169,7 +259,7 @@ int main()
         output.clear();
         liveProcessor.processBlock(output, midi);
         if (output.getRMSLevel(0, 0, output.getNumSamples()) <= 0.001f)
-            return fail(16, "Live generated WAV produced no preview audio.");
+            return fail(21, "Live generated WAV produced no preview audio.");
         std::cout << "live generation passed: "
                   << liveProcessor.generatedFile().getFullPathName() << '\n';
     }

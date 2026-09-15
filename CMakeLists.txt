@@ -26,6 +26,8 @@ endif()
 add_subdirectory("${LOOP_GENERATOR_JUCE_DIR}" "${CMAKE_BINARY_DIR}/JUCE")
 
 add_library(LoopGeneratorPluginCore STATIC
+    Sources/LoopGeneratorVST3/C2PASigningService.cpp
+    Sources/LoopGeneratorVST3/C2PASigningService.h
     Sources/LoopGeneratorVST3/GenerationService.cpp
     Sources/LoopGeneratorVST3/GenerationService.h
     Sources/LoopGeneratorVST3/GeneratedLoop.cpp

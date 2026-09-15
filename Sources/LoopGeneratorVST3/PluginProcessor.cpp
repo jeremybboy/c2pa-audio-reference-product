@@ -46,6 +46,11 @@ LoopGeneratorAudioProcessor::LoopGeneratorAudioProcessor()
     {
         status = error;
     }
+    juce::String signingError;
+    if (auto signing = C2PASigningConfiguration::discover(signingError))
+        signingService = std::make_unique<C2PASigningService>(*signing);
+    else if (runtimeReady.load(std::memory_order_acquire))
+        status = "C2PA test signing unavailable — " + signingError;
 }
 
 LoopGeneratorAudioProcessor::~LoopGeneratorAudioProcessor()
@@ -256,6 +261,13 @@ bool LoopGeneratorAudioProcessor::requestGeneration(
             return false;
         }
     }
+    if (signingService == nullptr)
+    {
+        setStatus(
+            "C2PA test signing is required before generation; run scripts/setup_c2pa.sh.");
+        generating.store(false, std::memory_order_release);
+        return false;
+    }
 
     GenerationRequest request;
     request.instrument = requestedInstrument;
@@ -291,10 +303,23 @@ bool LoopGeneratorAudioProcessor::requestGeneration(
             generating.store(false, std::memory_order_release);
             return;
         }
+        setStatus("Signing and validating generated WAV with C2PA test credentials…");
+        if (auto result = signingService->signAndValidate(
+                outcome.asset.audioFile,
+                outcome.asset.metadataFile);
+            result.failed())
+        {
+            outcome.asset.audioFile.deleteFile();
+            outcome.asset.metadataFile.deleteFile();
+            setStatus(result.getErrorMessage());
+            generating.store(false, std::memory_order_release);
+            return;
+        }
         if (auto result = loadGeneratedAudio(
                 outcome.asset.audioFile,
                 outcome.asset.bars,
-                outcome.asset.generationBpm);
+                outcome.asset.generationBpm,
+                true);
             result.failed())
         {
             setStatus(result.getErrorMessage());
@@ -304,7 +329,7 @@ bool LoopGeneratorAudioProcessor::requestGeneration(
         {
             const std::scoped_lock lock(metadataMutex);
             currentGeneratedDuration = outcome.asset.durationSeconds;
-            status = "Ready — press host Play or drag the WAV into the DAW.";
+            status = "Ready — C2PA test-signed; press host Play or drag the WAV into the DAW.";
         }
         generating.store(false, std::memory_order_release);
     });
@@ -353,6 +378,12 @@ juce::File LoopGeneratorAudioProcessor::generatedFile() const
     return currentGeneratedFile;
 }
 
+bool LoopGeneratorAudioProcessor::generatedHasContentCredentials() const
+{
+    const std::scoped_lock lock(metadataMutex);
+    return currentGeneratedSigned;
+}
+
 double LoopGeneratorAudioProcessor::generatedDurationSeconds() const
 {
     const std::scoped_lock lock(metadataMutex);
@@ -393,7 +424,8 @@ bool LoopGeneratorAudioProcessor::isPreviewPlaying() const noexcept
 juce::Result LoopGeneratorAudioProcessor::loadGeneratedAudio(
     const juce::File& file,
     int bars,
-    double generationBpm)
+    double generationBpm,
+    bool contentCredentialsPresent)
 {
     if (auto result = loopStore.load(file, bars, generationBpm); result.failed())
         return result;
@@ -401,6 +433,7 @@ juce::Result LoopGeneratorAudioProcessor::loadGeneratedAudio(
     {
         const std::scoped_lock lock(metadataMutex);
         currentGeneratedFile = file;
+        currentGeneratedSigned = contentCredentialsPresent;
         currentGenerationBpm = generationBpm;
         currentGeneratedDuration = loaded != nullptr
             ? static_cast<double>(loaded->audio.getNumSamples()) / loaded->sampleRate
@@ -419,6 +452,7 @@ void LoopGeneratorAudioProcessor::getStateInformation(juce::MemoryBlock& destina
         state.setProperty("instrument", instrument, nullptr);
         state.setProperty("seed", juce::String(seed), nullptr);
         state.setProperty("generatedFile", currentGeneratedFile.getFullPathName(), nullptr);
+        state.setProperty("generatedHasContentCredentials", currentGeneratedSigned, nullptr);
         state.setProperty("generatedDuration", currentGeneratedDuration, nullptr);
         state.setProperty("generationBpm", currentGenerationBpm, nullptr);
     }
@@ -439,6 +473,8 @@ void LoopGeneratorAudioProcessor::setStateInformation(const void* data, int size
     const auto restoredFile = juce::File(
         state.getProperty("generatedFile").toString());
     const auto restoredBpm = static_cast<double>(state.getProperty("generationBpm", 120.0));
+    const auto restoredSigned = static_cast<bool>(
+        state.getProperty("generatedHasContentCredentials", false));
     apvts.replaceState(state);
     {
         const std::scoped_lock lock(metadataMutex);
@@ -448,11 +484,13 @@ void LoopGeneratorAudioProcessor::setStateInformation(const void* data, int size
     }
     if (restoredFile.existsAsFile())
     {
-        if (auto result = loadGeneratedAudio(restoredFile, selectedBars(), restoredBpm);
+        if (auto result = loadGeneratedAudio(
+                restoredFile, selectedBars(), restoredBpm, restoredSigned);
             result.failed())
             setStatus("Saved loop is unavailable: " + result.getErrorMessage());
         else
-            setStatus("Saved loop restored.");
+            setStatus(restoredSigned ? "Saved C2PA test-signed loop restored."
+                                     : "Saved unsigned legacy loop restored.");
     }
 }
 
