@@ -16,9 +16,13 @@ Resolve the three frozen C2PA Asset Conformance 0.2 / Spec 2.4 failures: add `sp
 
 Add production credential-provider options and define TSA, certificate lifecycle, secure-key, distribution-signing, and notarization requirements without weakening the V1 evidence boundary.
 
-## V3 — Plugin shells
+## V3 — Plugin shells (VST3 prototype implemented)
 
-Add iPlug2 VST3 and Audio Unit targets around the reusable core. Keep model inference out of the real-time audio thread and define host-safe asset transfer.
+The JUCE 8.0.12 Apple-Silicon VST3 prototype is implemented as an audio effect with background Stable Audio generation, host-synchronized playback, saved state, and external WAV drag-out. Manual acceptance in the target DAW, signed/notarized distribution, AU support, and a production licensing decision remain open.
+
+## V3.1 — Plug-in provenance
+
+Define how a DAW session associates a generated asset with a later signed export before adding C2PA code to the plug-in. Keep cached generation metadata, DAW project state, routed audio, and final-file signing as separate evidence boundaries.
 
 ## V4 — Reference kit
 
