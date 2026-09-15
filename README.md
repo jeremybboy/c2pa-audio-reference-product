@@ -3,7 +3,7 @@
 
 # Loop Generator
 
-Loop Generator is an experimental, local-only macOS tool for creating short instrumental samples with Stable Audio Open Small. The repository now contains the original SwiftUI standalone and an Apple-Silicon VST3 audio-effect prototype; C2PA export remains in the standalone and is deliberately deferred from the plug-in.
+Loop Generator is an experimental, local-only macOS tool for creating short instrumental samples with Stable Audio Open Small. The repository contains the original SwiftUI standalone and an Apple-Silicon VST3 audio-effect prototype; both can apply the existing test-only C2PA manifest to generated WAV files.
 
 ## Reference product
 
@@ -24,6 +24,7 @@ This repository is a reference audio product used to study the end-to-end implem
 - 1, 2, or 4-bar generation based on host tempo and time signature
 - Host-synchronized loop playback, preview playback, gain, and saved plug-in state
 - External WAV drag-out for hosts that accept operating-system file drops
+- Mandatory test-C2PA signing and validation before a newly generated VST3 WAV becomes previewable or draggable
 
 ## V1 release status
 
@@ -39,7 +40,7 @@ Three manifest-alignment items are intentionally deferred to V1.1: add `specVers
 - CMake 3.25 or later for the VST3 (not required for the SwiftUI standalone)
 - Authenticated Hugging Face CLI access to `stabilityai/stable-audio-open-small`
 - Acceptance of the model's license terms by the person running setup
-- Official C2PA Conformance Test signing bundle stored externally as `~/Downloads/test-signing-bundle.pem` only for the standalone C2PA test path
+- Official C2PA Conformance Test signing bundle stored externally as `~/Downloads/test-signing-bundle.pem`
 
 ## Build and run
 
@@ -49,15 +50,16 @@ From the repository root:
 
 ```bash
 ./scripts/setup_runtime.sh
+./scripts/setup_c2pa.sh "$HOME/Downloads/test-signing-bundle.pem"
 JUCE_DIR="$(./scripts/setup_vst3.sh)"
 ./scripts/build_vst3.sh "$JUCE_DIR"
 ctest --test-dir build-vst3 --output-on-failure
 ./scripts/install_vst3.sh
 ```
 
-The installed bundle is `~/Library/Audio/Plug-Ins/VST3/Loop Generator.vst3`. Add it as an **audio effect** in the host, open its editor, choose a 1/2/4-bar length, generate, and press host Play; generation is a background helper process and never runs on the audio callback. `Drag WAV to DAW` exposes the cached generated file at `~/Library/Caches/LoopGenerator/generated`, but acceptance and placement of an external file drop depend on the host and require a manual DAW check.
+The installed bundle is `~/Library/Audio/Plug-Ins/VST3/Loop Generator.vst3`. Add it as an **audio effect** in the host, open its editor, choose a 1/2/4-bar length, generate, and press host Play; generation, test signing, and validation run on the background generation worker and never on the audio callback. `Drag WAV to DAW` is enabled only after the cached generated file validates as test-trusted; acceptance and placement of an external file drop still depend on the host and require a manual DAW check.
 
-The plug-in runtime stays external at `~/Library/Application Support/LoopGenerator/runtime`, linked by the installer to the ignored repository runtime. The model weights, Python environment, generated WAVs, and signing credentials are not packaged in the VST3 or tracked by Git.
+The model runtime stays external at `~/Library/Application Support/LoopGenerator/runtime`; the public C2PA tool and test trust files are installed under `~/Library/Application Support/LoopGenerator/c2pa`. The model weights, Python environment, generated WAVs, and signing credential are not packaged in the VST3 or tracked by Git.
 
 ### SwiftUI standalone
 
@@ -88,7 +90,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for component boundaries, [docs
 - The current C2PA sequencer hosts audio effects, so the VST3 declares itself as an effect rather than an instrument
 - Drag-out is implemented, but successful timeline placement remains host-specific manual acceptance
 - Generated cache files are not automatically pruned in this prototype
-- No C2PA signing or export occurs inside the VST3
+- VST3 C2PA signing is test-only and requires the external Conformance Test PEM
 - C2PA uses a public test credential and Test Root, not production PKI
 - C2PA Asset Conformance 0.2 / Spec 2.4 result is 28/31; three documented items are deferred to V1.1
 - No TSA, Developer ID distribution signature, notarization, or full conformance claim

@@ -286,7 +286,10 @@ void LoopGeneratorAudioProcessorEditor::timerCallback()
     dragButton.setEnabled(file.existsAsFile());
     revealButton.setEnabled(file.existsAsFile());
     fileLabel.setText(
-        file.existsAsFile() ? file.getFileName() : "No generated WAV yet",
+        file.existsAsFile()
+            ? (ownerProcessor.generatedHasContentCredentials() ? "C2PA • " : "Unsigned • ")
+                + file.getFileName()
+            : "No generated WAV yet",
         juce::dontSendNotification);
     if (file != displayedFile)
     {

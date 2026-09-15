@@ -18,6 +18,8 @@ TOOL_PATH="$TOOL_DIRECTORY/c2patool"
 TRUST_DIRECTORY="$REPO_ROOT/.c2pa-test/trust"
 ROOT_PATH="$TRUST_DIRECTORY/test-root-cert.pem"
 TRUST_CONFIG_PATH="$TRUST_DIRECTORY/store.cfg"
+INSTALLED_C2PA_DIRECTORY="$HOME/Library/Application Support/LoopGenerator/c2pa"
+INSTALLED_TRUST_DIRECTORY="$INSTALLED_C2PA_DIRECTORY/trust"
 SIGNING_BUNDLE="${1:-${LOOP_GENERATOR_C2PA_SIGNING_BUNDLE:-$HOME/Downloads/test-signing-bundle.pem}}"
 
 for command_name in curl shasum unzip awk openssl cmp; do
@@ -93,8 +95,14 @@ cmp -s "$TEMP_DIRECTORY/cert-public.pem" "$TEMP_DIRECTORY/key-public.pem" || {
 }
 openssl verify -purpose any -CAfile "$ROOT_PATH" "$SIGNING_BUNDLE" >/dev/null
 
+mkdir -p "$INSTALLED_TRUST_DIRECTORY"
+install -m 755 "$TOOL_PATH" "$INSTALLED_C2PA_DIRECTORY/c2patool"
+install -m 644 "$ROOT_PATH" "$INSTALLED_TRUST_DIRECTORY/test-root-cert.pem"
+install -m 644 "$TRUST_CONFIG_PATH" "$INSTALLED_TRUST_DIRECTORY/store.cfg"
+
 echo "C2PA test runtime ready"
 echo "c2patool: $($TOOL_PATH --version)"
 echo "trust mode: C2PA Conformance Test Root enabled"
 echo "signing credential: external file verified at $SIGNING_BUNDLE"
+echo "VST3 public C2PA runtime: $INSTALLED_C2PA_DIRECTORY"
 echo "private key copied into repository: no"

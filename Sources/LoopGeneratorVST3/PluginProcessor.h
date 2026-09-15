@@ -2,6 +2,7 @@
 
 #include "GeneratedLoop.h"
 #include "GenerationService.h"
+#include "C2PASigningService.h"
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
@@ -58,6 +59,7 @@ public:
     juce::String instrumentText() const;
     std::int64_t seedValue() const;
     juce::File generatedFile() const;
+    bool generatedHasContentCredentials() const;
     double generatedDurationSeconds() const;
     double currentHostBpm() const noexcept;
     int currentTimeSignatureNumerator() const noexcept;
@@ -69,7 +71,8 @@ public:
     juce::Result loadGeneratedAudio(
         const juce::File& file,
         int bars,
-        double generationBpm);
+        double generationBpm,
+        bool contentCredentialsPresent = false);
 
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
@@ -85,6 +88,7 @@ private:
     juce::AudioProcessorValueTreeState apvts;
     GeneratedLoopStore loopStore;
     std::unique_ptr<StableAudioGenerationService> generationService;
+    std::unique_ptr<C2PASigningService> signingService;
     std::thread generationThread;
     std::atomic<bool> generating { false };
     std::atomic<bool> runtimeReady { false };
@@ -99,6 +103,7 @@ private:
     juce::String instrument { "Synth" };
     std::int64_t seed { 424242 };
     juce::File currentGeneratedFile;
+    bool currentGeneratedSigned { false };
     double currentGeneratedDuration { 0.0 };
     double currentGenerationBpm { 120.0 };
 
